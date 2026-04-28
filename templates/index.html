@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panorama NAT Audit</title>
+    <style>
+        :root {
+            --bg: #0f1923;
+            --surface: #1a2634;
+            --surface2: #223044;
+            --border: rgba(255,255,255,0.08);
+            --text: #e0e6ed;
+            --text-dim: #7a8ba0;
+            --accent: #e94560;
+            --green: #2ecc71;
+            --yellow: #f39c12;
+            --red: #e74c3c;
+            --blue: #3498db;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ---- Top bar ---- */
+        .topbar {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 32px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .topbar-left { display: flex; align-items: center; gap: 12px; }
+        .topbar-left svg { width: 28px; height: 28px; fill: var(--accent); }
+        .topbar-left h1 { font-size: 17px; font-weight: 600; }
+        .topbar-right { display: flex; align-items: center; gap: 16px; }
+        .conn-badge {
+            font-size: 12px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: rgba(46,204,113,0.15);
+            color: var(--green);
+            border: 1px solid rgba(46,204,113,0.3);
+        }
+        .conn-badge.disconnected {
+            background: rgba(231,76,60,0.15);
+            color: var(--red);
+            border-color: rgba(231,76,60,0.3);
+        }
+        .btn-logout {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 6px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .btn-logout:hover { background: rgba(255,255,255,0.05); }
+
+        /* ---- Layout ---- */
+        .container { max-width: 1600px; margin: 0 auto; padding: 24px 32px; }
+
+        /* ---- Cards ---- */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .card-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title .step {
+            background: var(--accent);
+            color: #fff;
+            width: 24px; height: 24px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700;
+        }
+
+        /* ---- Connect form ---- */
+        .connect-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .form-group { margin-bottom: 0; }
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 13px;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .full-width { grid-column: 1 / -1; }
+
+        /* ---- Buttons ---- */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-primary:hover { background: #c73651; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.08); }
+        .btn-sm { padding: 6px 14px; font-size: 12px; }
+
+        /* ---- Method toggle ---- */
+        .method-toggle {
+            display: flex;
+            gap: 0;
+            margin-bottom: 16px;
+        }
+        .method-toggle button {
+            flex: 1;
+            padding: 10px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        .method-toggle button:first-child { border-radius: 6px 0 0 6px; }
+        .method-toggle button:last-child { border-radius: 0 6px 6px 0; }
+        .method-toggle button.active {
+            background: rgba(233,69,96,0.15);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* ---- Target selector ---- */
+        .target-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .target-item {
+            padding: 12px 16px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .target-item:hover { border-color: var(--accent); }
+        .target-item.selected {
+            border-color: var(--accent);
+            background: rgba(233,69,96,0.1);
+        }
+        .target-item .name { font-size: 14px; font-weight: 500; }
+        .target-item .meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+        .target-type-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .target-type-tabs button {
+            padding: 6px 16px;
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            color: var(--text-dim);
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .target-type-tabs button.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        /* ---- Summary stats ---- */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--surface2);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+        .stat-card .value { font-size: 28px; font-weight: 700; }
+        .stat-card .label { font-size: 11px; color: var(--text-dim); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card.danger .value { color: var(--red); }
+        .stat-card.warning .value { color: var(--yellow); }
+        .stat-card.success .value { color: var(--green); }
+        .stat-card.info .value { color: var(--blue); }
+
+        /* ---- Results table ---- */
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th {
+            background: var(--surface2);
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-dim);
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+        }
+        td {
+            padding: 10px 14px;
+            border-top: 1px solid var(--border);
+            vertical-align: top;
+        }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+
+        /* ---- Badges ---- */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-active { background: rgba(46,204,113,0.15); color: var(--green); }
+        .badge-inactive { background: rgba(231,76,60,0.15); color: var(--red); }
+        .badge-unused { background: rgba(243,156,18,0.15); color: var(--yellow); }
+        .badge-down { background: rgba(231,76,60,0.15); color: var(--red); }
+        .badge-up { background: rgba(46,204,113,0.15); color: var(--green); }
+        .badge-unknown { background: rgba(127,140,141,0.15); color: #95a5a6; }
+        .badge-ticket { background: rgba(52,152,219,0.15); color: var(--blue); }
+        .badge-flag { background: rgba(231,76,60,0.15); color: var(--red); margin: 1px 2px; }
+        .badge-norule { background: rgba(243,156,18,0.15); color: var(--yellow); }
+
+        /* ---- Expand row ---- */
+        .expand-btn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        .expand-btn:hover { background: rgba(255,255,255,0.05); }
+        .detail-row td {
+            background: var(--surface2);
+            padding: 16px 20px;
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .detail-section h4 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+        .detail-kv { margin-bottom: 4px; }
+        .detail-kv .k { color: var(--text-dim); font-size: 12px; }
+        .detail-kv .v { font-size: 13px; }
+        .sec-rule-item {
+            background: var(--bg);
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 6px;
+        }
+        .sec-rule-item .sr-name { font-weight: 600; font-size: 13px; }
+        .sec-rule-item .sr-desc { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+        /* ---- Filter bar ---- */
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filter-bar input {
+            padding: 8px 14px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 13px;
+            width: 260px;
+        }
+        .filter-bar input:focus { outline: none; border-color: var(--accent); }
+        .filter-chip {
+            padding: 6px 14px;
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            color: var(--text-dim);
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .filter-chip:hover { background: rgba(255,255,255,0.05); }
+        .filter-chip.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        /* ---- Spinner / status ---- */
+        .spinner {
+            display: inline-block;
+            width: 18px; height: 18px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .status-msg {
+            font-size: 13px;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+        .alert-error {
+            background: rgba(231,76,60,0.15);
+            border: 1px solid rgba(231,76,60,0.3);
+            color: var(--red);
+        }
+        .alert-info {
+            background: rgba(52,152,219,0.15);
+            border: 1px solid rgba(52,152,219,0.3);
+            color: var(--blue);
+        }
+        .hidden { display: none !important; }
+
+        /* ---- Checkbox ---- */
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-dim);
+            cursor: pointer;
+        }
+        .toggle-label input[type="checkbox"] {
+            accent-color: var(--accent);
+            width: 16px; height: 16px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Bar -->
+    <div class="topbar">
+        <div class="topbar-left">
+            <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 2.18l7 3.12v5.7c0 4.83-3.23 9.36-7 10.57-3.77-1.21-7-5.74-7-10.57V6.3l7-3.12z"/></svg>
+            <h1>Panorama NAT Audit</h1>
+        </div>
+        <div class="topbar-right">
+            <span id="connBadge" class="conn-badge disconnected">Disconnected</span>
+            <a href="/logout" class="btn-logout">Logout</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Step 1: Connect -->
+        <div class="card" id="connectCard">
+            <div class="card-title"><span class="step">1</span> Connect to Panorama</div>
+            <div class="method-toggle">
+                <button class="active" onclick="setMethod('api')">XML API</button>
+                <button onclick="setMethod('ssh')">SSH</button>
+            </div>
+            <div class="connect-grid">
+                <div class="form-group">
+                    <label>Panorama Host / IP</label>
+                    <input type="text" id="panoHost" placeholder="panorama.example.com" value="{{ panorama_host }}">
+                </div>
+                <div class="form-group" id="apiKeyGroup">
+                    <label>API Key <span style="color:var(--text-dim)">(or leave blank to generate)</span></label>
+                    <input type="text" id="apiKey" placeholder="LUFRPT..." value="{{ panorama_api_key }}">
+                </div>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="panoUser" placeholder="admin" value="{{ panorama_user }}">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="panoPass" placeholder="password" value="{{ panorama_pass }}">
+                </div>
+                <div class="full-width" style="display:flex; align-items:center; gap:16px; margin-top:8px;">
+                    <button class="btn btn-primary" id="connectBtn" onclick="doConnect()">Connect</button>
+                    <div id="connectStatus" class="status-msg hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Select Target -->
+        <div class="card hidden" id="targetCard">
+            <div class="card-title"><span class="step">2</span> Select Device Group or Firewall</div>
+            <div class="target-type-tabs">
+                <button class="active" onclick="setTargetType('device_group')">Device Groups</button>
+                <button onclick="setTargetType('firewall')">Managed Firewalls</button>
+            </div>
+            <div id="targetList" class="target-grid"></div>
+            <div style="margin-top:16px; display:flex; align-items:center; gap:16px;">
+                <label class="toggle-label">
+                    <input type="checkbox" id="doPing" checked>
+                    Ping internal hosts (check if alive)
+                </label>
+                <button class="btn btn-primary" id="auditBtn" onclick="runAudit()" disabled>Run NAT Audit</button>
+                <div id="auditStatus" class="status-msg hidden"></div>
+            </div>
+        </div>
+
+        <!-- Step 3: Results -->
+        <div class="card hidden" id="resultsCard">
+            <div class="card-title"><span class="step">3</span> Audit Results</div>
+
+            <div id="summaryStats" class="stats-row"></div>
+
+            <div class="filter-bar">
+                <input type="text" id="searchBox" placeholder="Search rules, IPs, tickets..." oninput="filterResults()">
+                <button class="filter-chip" data-filter="all" onclick="setFilter('all')">All</button>
+                <button class="filter-chip" data-filter="flagged" onclick="setFilter('flagged')">Flagged</button>
+                <button class="filter-chip" data-filter="unused" onclick="setFilter('unused')">Unused</button>
+                <button class="filter-chip" data-filter="host-down" onclick="setFilter('host-down')">Host Down</button>
+                <button class="filter-chip" data-filter="no-rule" onclick="setFilter('no-rule')">No Sec Rule</button>
+                <button class="filter-chip" data-filter="disabled" onclick="setFilter('disabled')">Disabled</button>
+                <div style="margin-left:auto; display:flex; gap:8px;">
+                    <button class="btn btn-secondary btn-sm" onclick="exportCSV()">Export CSV</button>
+                </div>
+            </div>
+
+            <div class="table-wrapper" style="max-height:70vh; overflow-y:auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>NAT Rule</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Original Src</th>
+                            <th>Original Dest</th>
+                            <th>Translated IP</th>
+                            <th>Internal IP</th>
+                            <th>Hit Count</th>
+                            <th>Host</th>
+                            <th>Security Rule(s)</th>
+                            <th>Tickets</th>
+                            <th>Flags</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ---- State ----
+    let method = '{{ panorama_method }}';
+    let targetType = 'device_group';
+    let selectedTarget = null;
+    let auditResults = [];
+    let currentFilter = 'all';
+
+    // ---- Connection method ----
+    function setMethod(m) {
+        method = m;
+        document.querySelectorAll('.method-toggle button').forEach(b => b.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById('apiKeyGroup').style.display = m === 'api' ? '' : 'none';
+    }
+
+    // ---- Connect ----
+    async function doConnect() {
+        const host = document.getElementById('panoHost').value.trim();
+        const apiKey = document.getElementById('apiKey').value.trim();
+        const username = document.getElementById('panoUser').value.trim();
+        const password = document.getElementById('panoPass').value;
+
+        if (!host) { alert('Enter Panorama host'); return; }
+
+        const btn = document.getElementById('connectBtn');
+        const status = document.getElementById('connectStatus');
+        btn.disabled = true;
+        status.classList.remove('hidden');
+        status.innerHTML = '<div class="spinner"></div> Connecting...';
+
+        try {
+            const resp = await fetch('/api/connect', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ method, host, api_key: apiKey, username, password })
+            });
+            const data = await resp.json();
+            if (data.error) {
+                status.innerHTML = `<span style="color:var(--red)">${data.error}</span>`;
+                btn.disabled = false;
+                return;
+            }
+            status.innerHTML = `<span style="color:var(--green)">Connected to ${data.hostname} via ${data.method.toUpperCase()}</span>`;
+            document.getElementById('connBadge').textContent = data.hostname;
+            document.getElementById('connBadge').className = 'conn-badge';
+
+            // Load targets
+            loadTargets();
+        } catch(e) {
+            status.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+            btn.disabled = false;
+        }
+    }
+
+    // ---- Load targets ----
+    async function loadTargets() {
+        document.getElementById('targetCard').classList.remove('hidden');
+        const list = document.getElementById('targetList');
+        list.innerHTML = '<div class="status-msg"><div class="spinner"></div> Loading device groups and firewalls...</div>';
+
+        try {
+            const resp = await fetch('/api/targets');
+            const data = await resp.json();
+            window._targets = data;
+            renderTargets();
+        } catch(e) {
+            list.innerHTML = `<div class="alert alert-error">Failed to load targets: ${e.message}</div>`;
+        }
+    }
+
+    function setTargetType(t) {
+        targetType = t;
+        selectedTarget = null;
+        document.getElementById('auditBtn').disabled = true;
+        document.querySelectorAll('.target-type-tabs button').forEach(b => b.classList.remove('active'));
+        event.target.classList.add('active');
+        renderTargets();
+    }
+
+    function renderTargets() {
+        const list = document.getElementById('targetList');
+        const data = window._targets;
+        if (!data) return;
+
+        if (targetType === 'device_group') {
+            if (!data.device_groups.length) {
+                list.innerHTML = '<div class="alert alert-info">No device groups found</div>';
+                return;
+            }
+            list.innerHTML = data.device_groups.map(dg => `
+                <div class="target-item" onclick="selectTarget('${dg}', this)">
+                    <div class="name">${dg}</div>
+                    <div class="meta">Device Group</div>
+                </div>
+            `).join('');
+        } else {
+            if (!data.firewalls.length) {
+                list.innerHTML = '<div class="alert alert-info">No managed firewalls found</div>';
+                return;
+            }
+            list.innerHTML = data.firewalls.map(fw => `
+                <div class="target-item" onclick="selectTarget('${fw.serial}', this)">
+                    <div class="name">${fw.hostname || fw.serial}</div>
+                    <div class="meta">${fw.serial} &middot; ${fw.ip || 'N/A'} &middot; ${fw.model || ''} &middot; ${fw.connected === 'yes' ? '🟢' : '🔴'}</div>
+                </div>
+            `).join('');
+        }
+    }
+
+    function selectTarget(name, el) {
+        selectedTarget = name;
+        document.querySelectorAll('.target-item').forEach(i => i.classList.remove('selected'));
+        el.classList.add('selected');
+        document.getElementById('auditBtn').disabled = false;
+    }
+
+    // ---- Run audit ----
+    async function runAudit() {
+        const btn = document.getElementById('auditBtn');
+        const status = document.getElementById('auditStatus');
+        const doPing = document.getElementById('doPing').checked;
+
+        btn.disabled = true;
+        status.classList.remove('hidden');
+        status.innerHTML = '<div class="spinner"></div> Running audit... pulling NAT rules, security policies, and pinging hosts...';
+
+        try {
+            const resp = await fetch('/api/audit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ target_type: targetType, target_name: selectedTarget, do_ping: doPing })
+            });
+            const data = await resp.json();
+
+            if (data.error && (!data.results || !data.results.length)) {
+                status.innerHTML = `<span style="color:var(--yellow)">${data.error}</span>`;
+                btn.disabled = false;
+                return;
+            }
+
+            auditResults = data.results || [];
+            const summary = data.summary || {};
+            status.innerHTML = `<span style="color:var(--green)">Audit complete — ${auditResults.length} NAT rules analyzed</span>`;
+
+            // Show results
+            document.getElementById('resultsCard').classList.remove('hidden');
+            renderSummary(summary);
+            currentFilter = 'all';
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.toggle('active', c.dataset.filter === 'all'));
+            renderResults();
+            btn.disabled = false;
+        } catch(e) {
+            status.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+            btn.disabled = false;
+        }
+    }
+
+    // ---- Render summary ----
+    function renderSummary(s) {
+        document.getElementById('summaryStats').innerHTML = `
+            <div class="stat-card info"><div class="value">${s.total_nat_rules || 0}</div><div class="label">Total NAT Rules</div></div>
+            <div class="stat-card success"><div class="value">${s.clean || 0}</div><div class="label">Clean</div></div>
+            <div class="stat-card warning"><div class="value">${s.unused || 0}</div><div class="label">Unused (0 Hits)</div></div>
+            <div class="stat-card danger"><div class="value">${s.host_down || 0}</div><div class="label">Host Down</div></div>
+            <div class="stat-card warning"><div class="value">${s.no_security_rule || 0}</div><div class="label">No Sec Rule</div></div>
+            <div class="stat-card"><div class="value">${s.disabled || 0}</div><div class="label">Disabled</div></div>
+        `;
+    }
+
+    // ---- Filter & render ----
+    function setFilter(f) {
+        currentFilter = f;
+        document.querySelectorAll('.filter-chip').forEach(c => c.classList.toggle('active', c.dataset.filter === f));
+        renderResults();
+    }
+
+    function filterResults() { renderResults(); }
+
+    function getFilteredResults() {
+        let data = auditResults;
+        const q = document.getElementById('searchBox').value.toLowerCase();
+
+        if (currentFilter === 'flagged') data = data.filter(r => r.flags.length > 0);
+        else if (currentFilter === 'unused') data = data.filter(r => r.is_unused === true);
+        else if (currentFilter === 'host-down') data = data.filter(r => r.host_alive === false);
+        else if (currentFilter === 'no-rule') data = data.filter(r => r.security_rules.length === 0);
+        else if (currentFilter === 'disabled') data = data.filter(r => r.disabled);
+
+        if (q) {
+            data = data.filter(r => {
+                const blob = [
+                    r.nat_rule, r.translated_ip, r.original_dst, r.original_src, r.internal_ip,
+                    r.nat_description, ...r.tickets,
+                    ...(r.security_rules || []).map(s => s.name + ' ' + s.description)
+                ].join(' ').toLowerCase();
+                return blob.includes(q);
+            });
+        }
+        return data;
+    }
+
+    function renderResults() {
+        const data = getFilteredResults();
+        const tbody = document.getElementById('resultsBody');
+
+        if (!data.length) {
+            tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:32px; color:var(--text-dim)">No matching rules found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.map((r, i) => {
+            const secNames = r.security_rules.map(s => s.name).join(', ') || '<span class="badge badge-norule">None</span>';
+            const tickets = r.tickets.map(t => `<span class="badge badge-ticket">${t}</span>`).join(' ') || '—';
+            const flags = r.flags.map(f => `<span class="badge badge-flag">${f}</span>`).join(' ') || '<span style="color:var(--green)">Clean</span>';
+
+            let hostBadge = '';
+            if (r.host_alive === true) hostBadge = '<span class="badge badge-up">Up</span>';
+            else if (r.host_alive === false) hostBadge = '<span class="badge badge-down">Down</span>';
+            else hostBadge = '<span class="badge badge-unknown">N/A</span>';
+
+            return `
+                <tr class="result-row" data-idx="${i}">
+                    <td><button class="expand-btn" onclick="toggleDetail(${i})">&#9654;</button></td>
+                    <td><strong>${r.nat_rule}</strong></td>
+                    <td>${r.nat_type}</td>
+                    <td><span class="badge ${r.disabled ? 'badge-inactive' : 'badge-active'}">${r.status}</span></td>
+                    <td>${r.original_src}</td>
+                    <td>${r.original_dst}</td>
+                    <td><code>${r.translated_ip}</code></td>
+                    <td><code>${r.internal_ip || '—'}</code></td>
+                    <td>${r.hit_count}${r.is_unused ? ' <span class="badge badge-unused">UNUSED</span>' : ''}</td>
+                    <td>${hostBadge}</td>
+                    <td>${secNames}</td>
+                    <td>${tickets}</td>
+                    <td>${flags}</td>
+                </tr>
+                <tr class="detail-row hidden" id="detail-${i}">
+                    <td colspan="13">
+                        <div class="detail-grid">
+                            <div class="detail-section">
+                                <h4>NAT Rule Details</h4>
+                                <div class="detail-kv"><span class="k">Rulebase:</span> <span class="v">${r.rulebase}</span></div>
+                                <div class="detail-kv"><span class="k">From Zone:</span> <span class="v">${r.from_zone}</span></div>
+                                <div class="detail-kv"><span class="k">To Zone:</span> <span class="v">${r.to_zone}</span></div>
+                                <div class="detail-kv"><span class="k">Original Source:</span> <span class="v">${r.original_src}</span></div>
+                                <div class="detail-kv"><span class="k">Original Dest:</span> <span class="v">${r.original_dst}</span></div>
+                                <div class="detail-kv"><span class="k">Translated IP:</span> <span class="v">${r.translated_ip}</span></div>
+                                <div class="detail-kv"><span class="k">Internal IP:</span> <span class="v">${r.internal_ip || 'N/A'}</span></div>
+                                <div class="detail-kv"><span class="k">Bi-Directional:</span> <span class="v">${r.bi_directional || 'no'}</span></div>
+                                <div class="detail-kv"><span class="k">Service:</span> <span class="v">${r.service}</span></div>
+                                <div class="detail-kv"><span class="k">Description:</span> <span class="v">${r.nat_description || '(none)'}</span></div>
+                            </div>
+                            <div class="detail-section">
+                                <h4>Matching Security Rules (${r.security_rules.length})</h4>
+                                ${r.security_rules.length ? r.security_rules.map(sr => `
+                                    <div class="sec-rule-item">
+                                        <div class="sr-name">${sr.name} <span class="badge ${sr.disabled === 'yes' ? 'badge-inactive' : 'badge-active'}">${sr.disabled === 'yes' ? 'disabled' : sr.action}</span></div>
+                                        <div class="sr-desc">${sr.description || '(no description)'}</div>
+                                        ${sr.tickets.length ? '<div style="margin-top:4px">' + sr.tickets.map(t => '<span class="badge badge-ticket">' + t + '</span>').join(' ') + '</div>' : ''}
+                                    </div>
+                                `).join('') : '<div style="color:var(--yellow)">No matching security rules found — inbound traffic may not be permitted</div>'}
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function toggleDetail(idx) {
+        const row = document.getElementById(`detail-${idx}`);
+        const btn = row.previousElementSibling.querySelector('.expand-btn');
+        const isHidden = row.classList.contains('hidden');
+        row.classList.toggle('hidden');
+        btn.innerHTML = isHidden ? '&#9660;' : '&#9654;';
+    }
+
+    // ---- Export CSV ----
+    async function exportCSV() {
+        const data = getFilteredResults();
+        if (!data.length) { alert('No results to export'); return; }
+
+        try {
+            const resp = await fetch('/api/export', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ results: data })
+            });
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `nat_audit_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch(e) {
+            alert('Export failed: ' + e.message);
+        }
+    }
+
+    // ---- Auto-connect on page load if configured ----
+    window.addEventListener('DOMContentLoaded', () => {
+        // Set the correct method toggle
+        if (method === 'ssh') {
+            document.querySelectorAll('.method-toggle button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.method-toggle button')[1].classList.add('active');
+            document.getElementById('apiKeyGroup').style.display = 'none';
+        }
+        // Auto-connect if flag is set and host is filled in
+        {% if auto_connect %}
+        const host = document.getElementById('panoHost').value.trim();
+        if (host) {
+            doConnect();
+        }
+        {% endif %}
+    });
+    </script>
+</body>
+</html>
